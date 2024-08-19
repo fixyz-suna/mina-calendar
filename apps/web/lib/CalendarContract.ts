@@ -1,7 +1,6 @@
 import {
     Field,
     SmartContract,
-    state,
     State,
     method,
     DeployArgs,
@@ -10,7 +9,12 @@ import {
   } from 'o1js';
   
   export class CalendarContract extends SmartContract {
-    @state(Field) numFreeTimes = State<Field>();
+    numFreeTimes: State<Field>;
+  
+    constructor(address: PublicKey) {
+      super(address);
+      this.numFreeTimes = State.init(Field(0)); // 初期値を設定
+    }
   
     deploy(args: DeployArgs) {
       super.deploy(args);
@@ -26,7 +30,7 @@ import {
   
     @method updateFreeTimes(newNumFreeTimes: Field) {
       const currentNumFreeTimes = this.numFreeTimes.get();
-      currentNumFreeTimes.assertEquals(this.numFreeTimes.get());
+      this.numFreeTimes.assertEquals(currentNumFreeTimes);
       this.numFreeTimes.set(newNumFreeTimes);
     }
   }
