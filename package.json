@@ -1,5 +1,6 @@
 {
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev --env-mode=loose",
@@ -13,13 +14,16 @@
     "prisma:generate": "turbo run prisma:generate",
     "env:development": "dotenv -e ./packages/chain/src/environments/development/.env -- pnpm",
     "env:inmemory": "dotenv -e ./packages/chain/src/environments/inmemory/.env -- pnpm",
-    "env:sovereign": "dotenv -e ./packages/chain/src/environments/sovereign/.env -- pnpm"
+    "env:sovereign": "dotenv -e ./packages/chain/src/environments/sovereign/.env -- pnpm",
+    "deploy:contract": "ts-node scripts/deployCalendarContract.ts"
   },
   "devDependencies": {
     "eslint": "^8.53.0",
     "prettier": "^3.1.0",
     "tsconfig": "workspace:*",
-    "turbo": "latest"
+    "turbo": "latest",
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.1"
   },
   "dependencies": {
     "dotenv-cli": "^7.4.2"

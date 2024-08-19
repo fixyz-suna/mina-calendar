@@ -4,9 +4,8 @@ import { Card } from "@/components/ui/card";
 import { Form } from "./ui/form";
 import { useForm } from "react-hook-form";
 import { Button } from "./ui/button";
-import { generateProof, updateContract } from '../lib/zkUtils';
-import { CalendarContract } from '../lib/CalendarContract';
-import { Field } from 'o1js';
+import { generateProof } from '../lib/zkUtils';
+import { Field, PublicKey, Mina, AccountUpdate, UInt64 } from 'o1js';
 
 export interface CalendarProps {
   wallet?: string;
@@ -32,8 +31,7 @@ export function Calendar({
 }: CalendarProps) {
   const form = useForm();
   const [freeTimes, setFreeTimes] = useState<TimeRange[]>([]);
-  const [calendarContract, setCalendarContract] = useState<CalendarContract | null>(null);
-  
+
   useEffect(() => {
     const checkGoogleConnection = async () => {
       try {
@@ -62,9 +60,6 @@ export function Calendar({
     } else {
       checkGoogleConnection();
     }
-
-    const contract = new CalendarContract(/* コントラクトアドレス */);
-    setCalendarContract(contract);
   }, [isGoogleConnected, setGoogleConnected]);
 
   const handleButtonClick = () => {
@@ -87,10 +82,22 @@ export function Calendar({
   };
 
   const saveFreeTimes = async () => {
-    if (freeTimes.length > 0 && calendarContract) {
+    if (freeTimes.length > 0 && wallet) {
       try {
         const { hash, proof } = generateProof(freeTimes);
-        await updateContract(calendarContract, proof, Field(hash));
+
+        const contractAddress = PublicKey.fromBase58("B62qqtxQdPa9MrDsHHRdgNsecRE2SCYBA4YkCEZ7NQ29KrpAsfPtKBW");
+
+        const txn = await Mina.transaction(wallet, async () => {
+          const update = AccountUpdate.create(contractAddress);
+          update.update({ field: 'numFreeTimes', value: hash });
+          update.requireSignature();
+        });
+
+        await txn.prove();
+        await txn.sign([wallet]);
+        await txn.send();
+
         console.log('空き時間がゼロ知識証明で保存されました');
       } catch (error) {
         console.error('空き時間の保存中にエラーが発生しました:', error);

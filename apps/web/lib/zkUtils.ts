@@ -1,27 +1,56 @@
-// apps/web/lib/zkUtils.ts
-import { Field, Poseidon, Mina } from 'o1js';
-import { CalendarContract } from './CalendarContract';
+import { Field, Poseidon, Mina, PrivateKey, PublicKey, AccountUpdate, UInt64, CircuitValue, prop, isReady, Circuit } from 'o1js';
 
 export interface TimeRange {
   start: Date;
   end: Date;
 }
 
+class TimeRangeCircuit extends CircuitValue {
+  @prop start: Field;
+  @prop end: Field;
+
+  constructor(start: Field, end: Field) {
+    super();
+    this.start = start;
+    this.end = end;
+  }
+
+  static fromTimeRange(timeRange: TimeRange): TimeRangeCircuit {
+    return new TimeRangeCircuit(
+      Field(timeRange.start.getTime()),
+      Field(timeRange.end.getTime())
+    );
+  }
+}
+
 export function generateProof(freeTimes: TimeRange[]) {
+
+  const timeCircuits = freeTimes.map(time => TimeRangeCircuit.fromTimeRange(time));
+  
   const hash = Poseidon.hash(
-    freeTimes.map(time => Field(time.start.getTime() + time.end.getTime()))
+    timeCircuits.map(time => Poseidon.hash([time.start, time.end]))
   );
 
-  // 注意: この部分は実際のZkProgram実装に置き換える必要があります
-  const proof = { /* ZkProgram を使用して証明を生成 */ };
+  const proof = Circuit.prove(() => {
+    timeCircuits.forEach(time => {
+      time.start.assertLt(time.end);
+    });
+  }, hash);
 
   return { hash, proof };
 }
 
-export async function updateContract(contract: CalendarContract, proof: any, hash: Field) {
+export async function updateContract(hash: Field) {
+  await isReady;
+  
+  const contractAddress = PublicKey.fromBase58("B62qqtxQdPa9MrDsHHRdgNsecRE2SCYBA4YkCEZ7NQ29KrpAsfPtKBW");
+
   const txn = await Mina.transaction(() => {
-    contract.updateFreeTimes(hash);
+    const update = AccountUpdate.create(contractAddress);
+    update.update({ field: 'numFreeTimes', value: hash });
+    update.requireSignature();
   });
+
   await txn.prove();
   await txn.sign().send();
 }
