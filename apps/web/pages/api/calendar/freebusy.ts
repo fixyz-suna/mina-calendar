@@ -28,7 +28,7 @@ export default withSession(async function handler(
     client.setCredentials(tokens);
 
     const timeMin = new Date();
-    const timeMax = new Date(timeMin.getTime() + 7 * 24 * 60 * 60 * 1000); // 1 week
+    const timeMax = new Date(timeMin.getTime() + 7 * 24 * 60 * 60 * 1000);
 
     const calendar = google.calendar({ version: 'v3', auth: client });
 

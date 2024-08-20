@@ -5,10 +5,11 @@ import { Form } from "./ui/form";
 import { useForm } from "react-hook-form";
 import { Button } from "./ui/button";
 import { generateProof } from '../lib/zkUtils';
-import { Field, PublicKey, Mina, AccountUpdate, UInt64 } from 'o1js';
+import { PublicKey, Mina, AccountUpdate, Permissions, PrivateKey, UInt64, Field } from 'o1js';
+import { useWalletStore } from '../lib/stores/wallet';
 
 export interface CalendarProps {
-  wallet?: string;
+  wallet?: PublicKey;
   loading: boolean;
   onConnectWallet: () => void;
   onConnectGoogleCalendar: () => void;
@@ -31,6 +32,7 @@ export function Calendar({
 }: CalendarProps) {
   const form = useForm();
   const [freeTimes, setFreeTimes] = useState<TimeRange[]>([]);
+  const { wallet: connectedWallet } = useWalletStore();
 
   useEffect(() => {
     const checkGoogleConnection = async () => {
@@ -49,7 +51,13 @@ export function Calendar({
       try {
         const response = await fetch('/api/calendar/freebusy');
         const data = await response.json();
-        setFreeTimes(data.freeTimes);
+    
+        const convertedFreeTimes = data.freeTimes.map((time: any) => ({
+          start: new Date(time.start),
+          end: new Date(time.end),
+        }));
+    
+        setFreeTimes(convertedFreeTimes);
       } catch (error) {
         console.error("空き時間の取得に失敗しました:", error);
       }
@@ -82,23 +90,43 @@ export function Calendar({
   };
 
   const saveFreeTimes = async () => {
-    if (freeTimes.length > 0 && wallet) {
+    if (freeTimes.length > 0 && connectedWallet) {
       try {
-        const { hash, proof } = generateProof(freeTimes);
-
+        const { hash } = generateProof(freeTimes);
+  
         const contractAddress = PublicKey.fromBase58("B62qqtxQdPa9MrDsHHRdgNsecRE2SCYBA4YkCEZ7NQ29KrpAsfPtKBW");
+  
+        const Network = Mina.Network('https://api.minascan.io/node/devnet/v1/graphql');
+        Mina.setActiveInstance(Network);
 
-        const txn = await Mina.transaction(wallet, async () => {
-          const update = AccountUpdate.create(contractAddress);
-          update.update({ field: 'numFreeTimes', value: hash });
-          update.requireSignature();
+        const publicKey = connectedWallet;
+  
+        const txn = await Mina.transaction(
+          { sender: publicKey, fee: UInt64.from(100_000_000) },
+          () => {
+            const update = AccountUpdate.create(contractAddress);
+            update.body.update = {
+              appState: [Field(hash)],
+            };
+            update.requireSignature();
+          }
+        );
+  
+        await txn.prove();
+
+        const signedTx = await window.mina.signTransaction({
+          transaction: txn.toJSON(),
         });
 
-        await txn.prove();
-        await txn.sign([wallet]);
-        await txn.send();
-
-        console.log('空き時間がゼロ知識証明で保存されました');
+        const result = await window.mina.sendTransaction({
+          transaction: signedTx.transaction,
+          feePayer: {
+            fee: signedTx.fee,
+            memo: signedTx.memo,
+          },
+        });
+  
+        console.log('空き時間がゼロ知識証明で保存されました', result);
       } catch (error) {
         console.error('空き時間の保存中にエラーが発生しました:', error);
       }
